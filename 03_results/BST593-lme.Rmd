@@ -1,0 +1,391 @@
+---
+title: "Linear Mixed effect analysis"
+author: "Victor Tsai"
+date: "2025-09-16"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+## **Analyzing activity-based anomaly detection results**
+
+the first step is joining two data frames together, so that I can analysis it with linear mixed effect models.
+
+```{r , echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(arrow)
+library(xtable)
+library(glmmTMB)
+
+## read from cleaned RDS
+fitness_cleaned <- readRDS('fitness.rds')
+
+## unique log id
+fitness_cleaned$unique_log_id = paste(fitness_cleaned$participant_id, fitness_cleaned$activity_type, fitness_cleaned$date, sep="_")
+
+## longitudinal and sort by date ascending
+fitness_cleaned <- fitness_cleaned %>% 
+                    group_by(participant_id, activity_type) %>% 
+                    arrange(date, .by_group = TRUE) %>%
+                    mutate(time = row_number()) %>% ungroup()
+
+fitness_cleaned <- fitness_cleaned[, !(names(fitness_cleaned) %in% c("date", "gender"))]
+summary(fitness_cleaned)
+
+```
+
+## Loading data analysis results:
+
+### Start from swimming data logs
+
+#### Loading data from dataset:
+
+```{r}
+
+swimming_data <- fitness_cleaned[fitness_cleaned$activity_type=='Swimming', !(names(fitness_cleaned) %in% c("activity_type"))]
+
+head(swimming_data)
+```
+
+#### Join data from Kmeans
+
+```{r}
+kmeans_swimming <- read_parquet('./data/kMeans_swimming.parquet')
+
+kmeans.swim.result <- merge(swimming_data, kmeans_swimming, by = "unique_log_id")
+
+head(kmeans.swim.result)
+```
+
+#### Join data from one class svm:
+
+```{r}
+ocsvm_swimming <- read_parquet('./data/oneClassSVM_swimming.parquet')
+
+ocsvm.swim.result <- merge(swimming_data, ocsvm_swimming, by = "unique_log_id")
+
+head(ocsvm.swim.result)
+```
+
+### Join data from autoencoder:
+
+```{r}
+autoencoder_swimming <- read_parquet('./data/autoencoder_swimming.parquet')
+autoE.swim.result <- merge(swimming_data, autoencoder_swimming, by = 'unique_log_id')
+
+head(autoE.swim.result)
+```
+
+## Running data:
+
+```{r}
+running_data <- fitness_cleaned[fitness_cleaned$activity_type=='Running', !(names(fitness_cleaned) %in% c("activity_type"))]
+
+head(running_data)
+```
+
+### Join data from k-means
+
+```{r}
+kmeans_running <- read_parquet('./data/kMeans_running.parquet')
+
+kmeans.running.result <- merge(running_data, kmeans_running, by = "unique_log_id")
+
+head(kmeans.running.result)
+```
+
+### Join data from one class svm:
+
+```{r}
+ocsvm_running <- read_parquet('./data/oneClassSVM_running.parquet')
+
+ocsvm.running.result <- merge(running_data, ocsvm_running, by = "unique_log_id")
+
+head(ocsvm.running.result)
+```
+
+### AutoEncoder for running:
+
+```{r}
+autoencoder_running <- read_parquet('./data/autoencoder_running.parquet')
+autoE.run.result <- merge(running_data, autoencoder_running, by = 'unique_log_id')
+
+head(autoE.run.result)
+```
+
+## Linear mixed effect model
+
+Anomaly detection on running activity with one class svm and k-means methods.
+
+```{r, eval=FALSE}
+
+response_var <- "anomaly"
+
+fixed_effect <- setdiff(
+  names(kmeans.running.result),
+  c("anomaly", "participant_id", "unique_log_id", "height_cm", "weight_kg", "time", "distance_to_centroid","cluster", "svm_score")
+)
+
+random_effect <- "(time | participant_id)"
+
+experiment.formula <- as.formula(
+  paste(
+    response_var,
+    "~",
+    paste(fixed_effect, collapse = " + "),
+    "+",
+    random_effect, collapse = ""
+  )
+)
+
+
+glm.run.cluster <- glmmTMB(
+  experiment.formula,
+  data = kmeans.running.result,
+  family = binomial(link = "logit")
+)
+summary(glm.run.cluster)
+
+```
+
+> The mixed-effects logistic regression identified several significant predictors of anomaly occurrence. Higher calories burned, greater daily steps, and higher fitness level were associated with increased odds of anomalies, while longer sleep duration was associated with lower odds of anomalies. The intercept of approximately −5 reflects low baseline log-odds of anomalies when all predictors are at zero. The random intercept variance (0.87) indicates substantial heterogeneity across participants in baseline anomaly risk.
+
+multiple covariants analysis on one class svm
+
+```{r, eval=FALSE}
+
+glm.run.ocsvm <- glmmTMB(
+  experiment.formula,
+  data = ocsvm.running.result,
+  family = binomial(link = "logit")
+)
+summary(glm.run.ocsvm)
+
+
+```
+
+> In the mixed-effects logistic regression model, **calories burned, average heart rate, and sleep hours** emerged as the most important predictors of anomalous activity logs. Specifically, higher calories burned and higher average heart rate were associated with **increased odds of anomalies**, whereas longer sleep duration was associated with **decreased odds of anomalies**.
+>
+> The random effects indicated substantial variability across participants (random intercept variance = 27.08, Std.Dev ≈ 5.20) and a small negative correlation with time (variance = 0.103, Std.Dev ≈ 0.32, Corr = -0.79), suggesting that baseline anomaly probabilities differ markedly between participants, while within-participant changes over time are comparatively minor.
+
+Swimming: anomaly detection
+
+```{r, eval=FALSE}
+
+glm.swim.cluster <- glmmTMB(
+  experiment.formula,
+  data = kmeans.swim.result,
+  family = binomial(link = "logit")
+)
+summary(glm.swim.cluster)
+
+```
+
+> the model indicated that sleep_hours, stress_level and fitness_level are significant factors for odd ratio to identify anomalies.
+>
+> The random effects indicated substantial variability across participants and a small negative correlation with time, suggesting that baseline anomaly probabilities differ markedly between participants, while within-participant changes over time are comparatively minor.
+
+```{r, eval=FALSE}
+
+ocsvm.swim.cluster <- glmmTMB(
+  experiment.formula,
+  data = ocsvm.swim.result,
+  family = binomial(link = "logit")
+)
+summary(ocsvm.swim.cluster)
+```
+
+> the model showed that average heart rate, sleep hours and stress level are significant for anomalies.
+>
+> While higher average heart rate leads to higher odd ratio to anomalies, lower sleep hours and stress level lead to higher odd ratio to anomalies.
+>
+> random effects indicates that variance between participants are statistically significant than multiple measurements with in each participant.
+
+### Hetrogenious of models:
+
+```{r}
+source("utils/analysis.R")
+
+corr_summary(kmeans_swimming, ocsvm_swimming, activity="swimming", print_xtable = TRUE)
+```
+
+```{r}
+
+corr_summary(kmeans_running, ocsvm_running, activity="running", print_xtable = TRUE)
+
+```
+
+Union and intersection:
+
+### High confidence anomaly detection
+
+```{r}
+source('utils/analysis.R')
+swimming.high.conf <- fit_high_conf_anomaly_model(swimming_data, kmeans_swimming, ocsvm_swimming)
+
+print(swimming.high.conf$model)
+```
+
+## High confidence anomaly events:
+
+```{r}
+source('utils/analysis.R')
+running.high.conf <- fit_high_conf_anomaly_model(running_data, kmeans_running, ocsvm_running)
+
+summary(running.high.conf$model)
+```
+
+```{r}
+source("utils/analysis.R")
+
+swim.table.result <-  model_to_xtable(swimming.high.conf$model)
+
+print(swim.table.result$fixed,
+      include.rownames = TRUE,
+      comment = FALSE,
+      booktabs = TRUE)
+```
+
+```{r}
+run.table.result <-  model_to_xtable(running.high.conf$model)
+
+print(run.table.result$fixed,
+      include.rownames = TRUE,
+      comment = FALSE,
+      booktabs = TRUE)
+```
+
+### Appendix:
+
+Correlation: Colinearity Analysis
+
+```{r}
+library(corrplot)
+numeric_df <- fitness_cleaned %>% select_if(is.numeric)
+corr_matrix <- cor(numeric_df,
+                   use = "pairwise.complete.obs")
+
+print(corr_matrix)
+```
+
+```{r}
+library(ggcorrplot)
+
+# 建立 correlation plot 物件
+
+p <- ggcorrplot(corr_matrix, method = "circle") +
+  theme(
+    plot.margin = margin(20, 20, 20, 20), # 上右下左，單位為 pt
+    axis.text.x = element_text(vjust = 1, size = 10),
+    axis.text.y = element_text(size = 10)
+  )
+
+print(p)
+
+ggsave("correlation_plot_spaced.png", plot = p, width = 7, height = 6, dpi = 300)
+
+```
+
+## Pair comparison correlation matrix on Swimming data:
+
+```{r}
+source("utils/analysis.R")
+swim_datas <- list(kmeans_swimming, ocsvm_swimming, autoencoder_swimming)
+suffix <- c('kmeans', 'ocsvm', 'autoEncoder')
+swim.analysis.results <- pair_corr_summary(swim_datas, suffix, activity = "Swimming")
+
+swim.analysis.results
+```
+
+```{r}
+
+```
+
+### Pair comparison for running data:
+
+```{r}
+source("utils/analysis.R")
+running_datas <- list(kmeans_running, ocsvm_running, autoencoder_running) 
+suffix <- c('kmeans', 'ocsvm', 'autoEncoder')
+run.analysis.results <- pair_corr_summary(running_datas, suffix, activity = "Running")
+
+run.analysis.results
+```
+
+```{r}
+source("utils/analysis.R")
+
+summary_to_corr_matrix(data = swim.analysis.results$summary, col_name = "kappa", activity="swim", plot_name="kappa_corr")
+
+
+```
+
+```{r}
+summary_to_corr_matrix(data = swim.analysis.results$summary, col_name = "jaccard", activity="swim", plot_name="jaccard_corr")
+```
+
+```{r}
+summary_to_corr_matrix(data = swim.analysis.results$summary, col_name = "mcc", activity="swim", plot_name="mcc_corr")
+```
+
+```{r}
+
+summary_to_corr_matrix(data = run.analysis.results$summary , col_name = "jaccard", activity="run", plot_name="jaccard_corr")
+
+summary_to_corr_matrix(data = run.analysis.results$summary , col_name = "mcc", activity="run", plot_name="mcc_corr")
+
+summary_to_corr_matrix(data = run.analysis.results$summary, col_name = "kappa", activity="run", plot_name="kappa_corr")
+
+```
+
+```{r}
+print(xtable(run.analysis.results$summary, caption="Pair comparisons for anomaly detection results in running activity", label="tab:metric-run"))
+```
+
+```{r}
+print(xtable(swim.analysis.results$summary, caption="Pair comparisons for anomaly detection results in swim activity", label="tab:metric-swim"))
+```
+
+```{r}
+source('utils/analysis.R')
+
+running.anomaly.analysis = high.confidence.anomaly.detection(data = running_data, data_list = running_datas, suffix = suffix)
+
+running.anomaly.analysis$summary
+```
+
+### Table for analysis running activity:
+
+```{r}
+print(model_to_xtable(running.anomaly.analysis$model))
+```
+
+```{r}
+swimming.anomaly.analysis = high.confidence.anomaly.detection(data = swimming_data, data_list = swim_datas, suffix = suffix)
+
+swimming.anomaly.analysis$summary
+```
+
+```{r}
+print(model_to_xtable(swimming.anomaly.analysis$model))
+```
+
+### Fitness data sample here:
+
+```{r}
+sample <- swimming_data[1:6, c('participant_id', 'weight_kg', 'avg_heart_rate','blood_pressure_systolic', 'duration_minutes','daily_steps')]
+
+xtable::xtable(
+    sample,
+    caption = 'Sample activity logs for swimming data',
+    label = 'tab:longitudinal',
+    align = c("l", rep("r", ncol(sample)))
+  )
+```

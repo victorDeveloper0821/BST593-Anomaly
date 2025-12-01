@@ -1,0 +1,418 @@
+---
+title: "Insight Fitness"
+author: "Victor Tsai"
+date: "2025-09-16"
+output: 
+  pdf_document: 
+    keep_tex: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+## **Health and fitness dataset**
+
+This dataset, obtained from Kaggle, comprises demographic information, physiological measurements, and activity logs for approximately 3,000 participants, with records spanning the years 2023 to 2024.
+
+The activity logs include labeled activities, enabling the implementation of context-based anomaly detection methods on the dataset.
+
+## Overview fitness dataset:
+
+This section provides a basic overview of the dataset, including the distribution of activity types, health conditions, and smoking histories, as well as the intensity levels recorded in each activity log.
+
+```{r , echo=FALSE}
+library(dplyr)
+library(ggplot2)
+fitness_origin <- read.csv("./health_fitness_dataset.csv")
+
+fitness_origin <- fitness_origin[,c('age', 'height_cm', 'bmi', 'daily_steps', 'avg_heart_rate','resting_heart_rate', 'blood_pressure_systolic', 'blood_pressure_diastolic', 'health_condition')]
+## read from cleaned RDS
+fitness_cleaned <- readRDS('fitness.rds')
+
+summary(fitness_cleaned)
+```
+
+## Summary of data with xtable:
+
+This section will summarize the fitness data, including sample size or missing values.
+
+### validity summary:
+
+```{r}
+library(xtable)
+
+is_missing <- function(x) {
+  if (is.factor(x)) x <- as.character(x)
+  return(is.na(x) | trimws(x) == "")
+}
+
+is_valid <- function(x) {
+  if (is.numeric(x)) {
+    return(!is.na(x) & x > 0)
+  } else if (is.character(x)) {
+    return(!is.na(x) & trimws(x) != "")
+  } else if (is.factor(x)) {
+    x <- as.character(x)
+    return(!is.na(x) & trimws(x) != "")
+  } else {
+    return(!is.na(x))
+  }
+}
+
+truncate2 <- function(x) floor(x * 100) / 100
+
+summary_df <- data.frame(
+  Variable = names(fitness_origin),
+  Total_Count = sapply(fitness_origin, length),
+  Missing_Count = sapply(fitness_origin, function(x) sum(is_missing(x))),
+  Missing_Pct = sapply(fitness_origin, function(x) {
+    pct <- sum(is_missing(x)) * 100 / length(x)
+    sprintf("%.2f%%", truncate2(pct))
+  }),
+  Valid_Count = sapply(fitness_origin, function(x) sum(is_valid(x))),
+  Valid_Pct = sapply(fitness_origin, function(x) {
+    pct <- sum(is_valid(x)) * 100 / length(x)
+    sprintf("%.2f%%", truncate2(pct))
+  })
+)
+
+print(
+  xtable(summary_df,
+         caption = "Summary of Missing and Valid Counts per Variable",
+         label = "tab:missing_summary"),
+  include.rownames = FALSE
+)
+
+```
+
+## Data Visualization: 
+
+### Pie Chart of Activity Types:
+
+The fitness dataset includes ten distinct activities recorded for 3,000 participants. To provide a clearer illustration, the pie chart below presents the percentage distribution of each activity.
+
+```{r, echo=FALSE}
+
+pie <- fitness_cleaned %>% group_by(activity_type) %>% summarise(count = n())
+
+pie <- pie %>% mutate(percentage = (count / sum(count))*100,
+         label = paste0(activity_type, "\n", round(percentage, 1), "%")) 
+
+ggplot(pie, aes(x="", y=count, fill=activity_type)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) +
+  theme_void() +
+  geom_text(aes(label = label), 
+            position = position_stack(vjust = 0.5), 
+            size = 3)
+```
+
+#### Bar Chart of Participants’ Health Conditions:
+
+The dataset comprises activity logs from 3,000 participants. The frequency of reported health conditions is summarized using bar charts, providing an overview of the participants’ overall health status.
+
+```{r, echo=FALSE}
+
+health_bar <- fitness_cleaned %>% 
+  select(participant_id, health_condition) %>% 
+  distinct() %>%
+  group_by(health_condition) %>%
+  summarise(count = n())
+
+health_bar <- health_bar %>% mutate(percentage = (count / sum(count))*100) 
+
+ggplot(health_bar, aes(x=health_condition, y=count, fill=health_condition)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  labs(
+    #title = "Bar charts for Health Condition and Participants",
+    x = "Health Condition",
+    y = "Participants",
+    fill = "Health Condition"
+  )
+
+```
+
+#### Bar Chart of Participants’ Smoking History:
+
+The dataset comprises activity logs from 3,000 participants. The frequency of reported smoking history is illustrated using bar charts, providing an overview of this health-related behavior among participants.
+
+```{r}
+smoke_bar <- fitness_cleaned %>% 
+  select(participant_id, smoking_status) %>% 
+  distinct() %>% 
+  group_by(smoking_status) %>% 
+  summarise(count = n())
+
+smoke_bar <- smoke_bar %>% mutate(percentage = (count / sum(count))*100) 
+
+ggplot(smoke_bar, aes(x=smoking_status, y=count, fill=smoking_status)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  labs(
+    x = "Smoking Status",
+    y = "Participants",
+    fill = "Smoking Status"
+  )
+```
+
+#### **Bar Chart of Activity Intensity in Logs**:
+
+The dataset comprises activity logs from 3,000 participants. The distribution of activity intensity levels is presented using bar charts, providing an overview of participants’ engagement across different intensity categories.
+
+```{r}
+intense_bar <- fitness_cleaned %>% group_by(intensity) %>% summarise(count = n())
+
+intense_bar <- intense_bar %>% mutate(percentage = (count / sum(count))*100) 
+
+ggplot(intense_bar, aes(x=intensity, y=count, fill=intensity)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  labs(
+    x = "Intensity",
+    y = "Participants",
+    fill = "Intensity"
+  )
+```
+
+## Why context-based anomaly detection?
+
+Activity logs for this data set are labeled many **activity_type**. Furthermore, anomaly detection may not effect well due to different baseline for physiological measurements.
+
+### Average Heart Rate V.S. activity_type:
+
+For this section, I will use box plot to show if average heart rates are different between activities.
+
+To ensure if heart rate is directly impacted by activities participants engage in.
+
+```{r, echo=FALSE}
+ggplot(data = fitness_cleaned, aes(x = activity_type, y=avg_heart_rate, fill=activity_type)) +
+  geom_boxplot()+
+  theme_minimal()+
+  labs(
+    title = "Average Heart Rate vs activity_type",
+    x = "Activity Type",
+    y = "Average Heart Rate",
+    fill = "activity_type"
+  )
+  
+```
+
+#### Hypothesis Test:
+
+$H_0$ : average heart rate has no difference between activity types.
+
+$H_A$: average heart rate has difference in at least one activity type.
+
+```{r}
+## Anova for if average heart rate distributed in different activity type 
+heartRate_anova <- aov(fitness_cleaned$avg_heart_rate ~ factor(fitness_cleaned$activity_type))
+summary(heartRate_anova)
+
+```
+
+> p-value is 0.124 so the test support null hypothesis, indicating that average heart rate has no difference between activities.
+
+### Resting Heart Rate V.S. activity_type:
+
+For this section, I will use box plot to show if resting heart rates are different between activities.
+
+To ensure if heart rate is directly impacted by activities participants engage in.
+
+```{r, echo=FALSE}
+ggplot(data = fitness_cleaned, aes(x = activity_type, y=resting_heart_rate, fill=activity_type)) +
+  geom_boxplot()+
+  theme_minimal()+
+  labs(
+#    title = "Resting Heart Rate vs activity_type",
+    x = "Activity Type",
+    y = "Resting Heart Rate",
+    fill = "Activity Type"
+  )
+
+```
+
+#### Hypothesis Test:
+
+$H_0$ : Average resting heart rate has no difference between activity types.
+
+$H_A$: Average resting heart rate has difference in at least one activity type.
+
+```{r}
+## Anova for if average heart rate distributed in different activity type 
+rest.heartRate.anova <- aov(fitness_cleaned$resting_heart_rate ~ factor(fitness_cleaned$activity_type))
+summary(rest.heartRate.anova)
+
+```
+
+> p-value is 0.000373, showed that resting heart rate is different between at least one activity and other activities; I will use pairwise t-test with **bonferroni** adjustment to find out which two activities have significant difference.
+
+```{r}
+rest.hr.test <- pairwise.t.test(fitness_cleaned$resting_heart_rate, fitness_cleaned$activity_type, p.adjust.method = 'bonferroni')
+
+rest.hr.test
+```
+
+> resting heart rate are different in walking and cycling, p-value is 0.006 which indicates that they are huge difference between two activities.
+
+### Systolic Blood pressure V.S. activity_type:
+
+```{r}
+ggplot(data = fitness_cleaned, aes(x = activity_type, y=blood_pressure_systolic, fill=activity_type)) +
+  geom_boxplot()+
+  theme_minimal()+
+  labs(
+    title = "Systolic blood pressure vs activity_type",
+    x = "Activity Type",
+    y = "blood_pressure_systolic",
+    fill = "activity_type"
+  )
+
+```
+
+#### Hypothesis Test:
+
+$H_0$ : systolic blood pressure has no difference between activity types.
+
+$H_A$: systolic blood pressure has difference in at least one activity type.
+
+```{r}
+systolic.bp.aov <- aov(fitness_cleaned$blood_pressure_systolic~fitness_cleaned$activity_type)
+
+summary(systolic.bp.aov)
+```
+
+> Since the p-value is less than 0.05, the test supports the alternative hypothesis, indicating that systolic blood pressure differs across at least one activity type.
+>
+> As a next step, a post-hoc test will be conducted to identify which activity types exhibit significant differences.
+
+```{r}
+
+pairwise.t.test(fitness_cleaned$blood_pressure_systolic, fitness_cleaned$activity_type, p.adjust.method = "bonferroni")
+
+```
+
+> Systolic blood pressure shows a significant difference between two activities, Running and Swimming, as indicated by the small p-value (2.7e-07).
+
+### Diastolic blood pressure v.s. Activity Type
+
+```{r}
+ggplot(data = fitness_cleaned, aes(x = activity_type, y=blood_pressure_diastolic, fill=activity_type)) +
+  geom_boxplot()+
+  theme_minimal()+
+  labs(
+    title = "diastolic blood pressure vs activity_type",
+    x = "Activity Type",
+    y = "blood_pressure_diastolic",
+    fill = "Activity Type"
+  )
+
+```
+
+### Hypothesis Test:
+
+-   $H_0$: Average diastolic blood pressures are not different between activity types.
+
+-   $H_A$: Average diastolic blood pressure are different between at least one activity type.
+
+```{r}
+diastolic.bp.aov <- aov(fitness_cleaned$blood_pressure_diastolic~fitness_cleaned$activity_type)
+
+summary(diastolic.bp.aov)
+
+```
+
+> Since the ANOVA test indicated that the p-value was less than 0.05, the results support the alternative hypothesis that the mean diastolic blood pressure differs across at least one activity type.
+>
+> Therefore, pairwise *t*-tests with Bonferroni adjustment were conducted to identify which specific pairs of activities exhibit significant differences.
+
+```{r}
+
+pairwise.t.test(fitness_cleaned$blood_pressure_diastolic, fitness_cleaned$activity_type, p.adjust.method = "bonferroni")
+```
+
+> Mean diastolic blood pressure are significantly different between Swimming and Dancing.
+
+### Linear mixed effect - context based:
+
+Since we find out the difference of blood pressure between two activity, Swimming and Walking, I will use longitudinal analysis how time and individual difference on average heart rate.
+
+```{r}
+
+## context-based research 
+swimming_df <- fitness_cleaned %>% filter(activity_type=='Swimming')
+
+walking_df <- fitness_cleaned %>% filter(activity_type=='Walking')
+
+swimming_df <- swimming_df %>% arrange(participant_id, date) %>% 
+  group_by(participant_id) %>% 
+  mutate(time=row_number()) %>% ungroup()
+
+head(swimming_df[, c('avg_heart_rate', 'participant_id', 'time')], 15)
+
+walking_df <- walking_df %>% arrange(participant_id, date) %>% 
+  group_by(participant_id) %>% 
+  mutate(time=row_number()) %>% ungroup()
+
+head(walking_df[, c('avg_heart_rate', 'participant_id', 'time')],15)
+```
+
+#### Longitudinal analysis for swimming physical data:
+
+```{r}
+library(lme4)
+## random intercept
+swim.lme.ri <- lmer(avg_heart_rate~time+(1|participant_id), data = swimming_df)
+summary(swim.lme.ri)
+
+```
+
+#### Longitudinal analysis for walking physical data:
+
+```{r}
+###Swimming
+
+## random intercept
+walk.lme.ri <- lmer(avg_heart_rate~time+(1|participant_id), data = walking_df)
+summary(walk.lme.ri)
+```
+
+> Two longitudinal data analyses of average heart rate over time across participants indicate that time has only a minor effect on average heart rate, although the effect is statistically significant. In contrast, the summary results suggest that differences between individuals are substantial, with a standard deviation of up to 10.
+
+## Appendix: Xtable
+
+```{r}
+
+systolic.bp.aov <- aov(blood_pressure_systolic ~ activity_type, data = fitness_cleaned)
+print(xtable(systolic.bp.aov, 
+             caption="ANOVA - Systolic Blood Pressure by Activity",
+             label="tab:anova-sys-bp"))
+
+```
+
+```{r}
+systolic_pairwise <- pairwise.t.test(fitness_cleaned$blood_pressure_systolic, fitness_cleaned$activity_type, p.adjust.method = "bonferroni")
+
+systolic_xt <- xtable(systolic_pairwise$p.value, 
+                      caption="Post-hoc Test - Systolic Blood Pressure", 
+                      label="tab:pairwise-sys-bp",
+                      digits=8)
+
+print(systolic_xt)
+
+```
+
+```{r}
+diastolic.bp.aov <- aov(blood_pressure_diastolic ~ activity_type, data = fitness_cleaned)
+print(xtable(diastolic.bp.aov, 
+             caption="ANOVA - Diastolic Blood Pressure by Activity",
+             label="tab:anova-dias-bp"))
+```
+
+```{r}
+diastolic_pairwise <- pairwise.t.test(fitness_cleaned$blood_pressure_diastolic, fitness_cleaned$activity_type, p.adjust.method = "bonferroni")
+
+diastolic_xt <- xtable(diastolic_pairwise$p.value, 
+                       caption="Post-hoc Test - Diastolic Blood Pressure", 
+                       label="tab:pairwise-dias-bp")
+
+print(diastolic_xt)
+```
