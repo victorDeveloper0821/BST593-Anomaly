@@ -68,7 +68,7 @@ def standardize_fitness(fitness: pd.DataFrame) -> pd.DataFrame:
     ]
     existing_cols = [c for c in cols_to_scale if c in fitness.columns]
 
-    scaler = StandardScaler(copy=False)  # 避免額外複製
+    scaler = StandardScaler(copy=False) 
     fitness[existing_cols] = scaler.fit_transform(fitness[existing_cols])
 
     return fitness

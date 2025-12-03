@@ -83,6 +83,44 @@ def train_autoencoder(
     patience = 30, 
     epochs = 100, 
     device = None):
+    """
+Train an autoencoder model for activity data.
+
+Parameters
+----------
+X_train : array-like or torch.Tensor
+    Training dataset.
+X_val : array-like or torch.Tensor
+    Validation dataset.
+X_test : array-like or torch.Tensor
+    Testing dataset.
+model_class : type
+    Autoencoder model class to be instantiated and trained.
+input_dim : int
+    Dimensionality of the input data.
+encoding_dim : int
+    Dimensionality of the latent (encoded) representation.
+lr : float
+    Learning rate for the optimizer.
+batch_size : int
+    Number of samples per training batch.
+patience : int
+    Patience parameter for early stopping.
+epochs : int
+    Number of training iterations (epochs).
+device : torch.device
+    Device on which the model will be trained (e.g., CPU or CUDA).
+
+Returns
+-------
+model : torch.nn.Module
+    The trained autoencoder model.
+history : dict
+    Training history containing loss curves and metrics.
+mean_error: float
+    Mean of reconstruction error
+"""
+
     
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

@@ -19,10 +19,34 @@ def find_best_k_bootstrap(df: pd.DataFrame,
                 output: str = '../output/',
                 Activity_type: str = 'Running'):
     """
-    自動找最佳 k
-    回傳最佳 k（Silhouette Score 最大）
-    可選擇 PCA 降維
-    """
+Determine the optimal value of parameter k.
+
+Parameters
+----------
+df : pandas.DataFrame
+    Input dataset.
+max_k : int
+    Maximum value of k to evaluate.
+n_bootstrap : int
+    Number of bootstrap samples to generate.
+sample_size : int
+    Number of rows to include in each bootstrap sample.
+pca_reduce : bool
+    Whether to apply PCA for dimensionality reduction.
+pca_components : int
+    Number of PCA components to retain when PCA is enabled.
+output : str or Path
+    Directory in which to save generated plots.
+activity_type : str
+    Activity type to be analyzed.
+
+Returns
+-------
+k : int
+    The optimal value of k.
+summary_df : pandas.DataFrame
+    A summary DataFrame containing evaluation metrics for each k.
+"""
 
     np.random.seed(random_state)
     numeric_df = df.select_dtypes(include=[np.number])
@@ -38,7 +62,7 @@ def find_best_k_bootstrap(df: pd.DataFrame,
         idx = np.random.choice(len(data), size=sample_size, replace=False)
         subset = data[idx]
 
-        # PCA 選項
+        # PCA dimension reduction
         if pca_reduce:
             pca = PCA(n_components=pca_components, random_state=random_state)
             subset = pca.fit_transform(subset)
@@ -47,13 +71,13 @@ def find_best_k_bootstrap(df: pd.DataFrame,
             kmeans = MiniBatchKMeans(n_clusters=k, random_state=random_state, n_init=5, batch_size=600)
             labels = kmeans.fit_predict(subset)
 
-            # silhouette 估計
+            # silhouette score
             score = silhouette_score(subset, labels)
             inertia = kmeans.inertia_
             silhouette_results[k].append(score)
             inertia_results[k].append(inertia)
 
-    # 計算每個 k 的平均 silhouette 分數
+    # calculate mean and standard deviation for scores
     mean_scores = {k: np.mean(v) for k, v in silhouette_results.items()}
     std_scores = {k: np.std(v) for k, v in silhouette_results.items()}
     summary=[]
@@ -74,8 +98,8 @@ def find_best_k_bootstrap(df: pd.DataFrame,
     summary_df = pd.DataFrame(summary)
     fig, ax1 = plt.subplots(figsize=(8, 5))
     
-    # 視覺化
-    # 左軸：Silhouette
+    # Visualization
+    # left axis Silhouette
     ax1.errorbar(
         summary_df["k"],
         summary_df["silhouette_mean"],
@@ -87,7 +111,7 @@ def find_best_k_bootstrap(df: pd.DataFrame,
     ax1.set_ylabel("Silhouette Score", color="tab:blue", fontsize=11)
     ax1.tick_params(axis="y", labelcolor="tab:blue")
 
-    # 右軸：Inertia
+    # right axis：Inertia
     ax2 = ax1.twinx()
     ax2.plot(
         summary_df["k"],
@@ -97,7 +121,6 @@ def find_best_k_bootstrap(df: pd.DataFrame,
     ax2.set_ylabel("Inertia", color="tab:orange", fontsize=11)
     ax2.tick_params(axis="y", labelcolor="tab:orange")
 
-    # 標題與樣式
     plt.title(f"Bootstrap-Averaged Silhouette and Inertia vs. k in {Activity_type}", fontsize=13)
     fig.tight_layout()
     ax1.grid(alpha=0.3)
@@ -124,45 +147,44 @@ def kmeans_anomaly_detection(
     return_with_input: bool = True,
 ):
     """
-    MiniBatchKMeans-based anomaly detection
-    ---------------------------------------
-    適合大型 DataFrame（6萬筆以上資料），使用信賴區間判斷離群值。
-    已針對 CPU/記憶體最佳化。
+MiniBatchKMeans-based anomaly detection.
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        已正規化的輸入資料。
-    unique_key : str
-        每筆紀錄的唯一識別欄。
-    best_k : int
-        已事先選定的最佳 K 值。
-    pca_reduce : bool
-        是否使用 PCA 降維（僅影響可視化與速度，不影響距離計算）。
-    pca_components : int
-        PCA 降維維度（預設 2）。
-    confidence : float
-        信賴區間（預設 0.95）。
-    random_state : int
-        隨機種子以保持重現性。
-    batch_size : int
-        MiniBatchKMeans 的 batch 大小，影響速度與記憶體。
-    return_with_input : bool
-        若 True，將結果合併回原始 DataFrame。
+Parameters
+----------
+df : pd.DataFrame
+    Standardized input dataframe.
+unique_key : str
+    Column name representing the unique log identifier.
+best_k : int
+    Optimal number of clusters (k).
+pca_reduce : bool
+    Whether to apply PCA for dimensionality reduction.
+pca_components : int
+    Number of principal components to retain (default: 2).
+confidence : float
+    Confidence interval threshold (default: 0.95).
+random_state : int
+    Random seed for reproducibility.
+batch_size : int
+    Batch size used to mitigate memory constraints during MiniBatchKMeans fitting.
+return_with_input : bool
+    If True, return the anomaly scores merged with the original dataframe.
 
-    Returns
-    -------
-    pd.DataFrame or (pd.DataFrame, float, float)
-        標註 cluster、距離與 anomaly 標記後的 DataFrame。
-        同時回傳信賴區間上下界 (lower, upper)。
-    """
+Returns
+-------
+pd.DataFrame or tuple
+    If `return_with_input` is True, returns a DataFrame containing the original
+    data merged with anomaly scores. Otherwise, returns a tuple containing:
+    (results_df, lower_threshold, upper_threshold).
+"""
+
 
     # --- Step 1: Select numeric columns only ---
     numeric_df = df.select_dtypes(include=[np.number])
     if numeric_df.empty:
-        raise ValueError("DataFrame 沒有數值欄位可供 KMeans 分群。")
+        raise ValueError("DataFrame must have numerical columns")
 
-    data = numeric_df.to_numpy(copy=False)  # 避免記憶體複製
+    data = numeric_df.to_numpy(copy=False) 
 
     # --- Step 2: Optional PCA (for speed-up or visualization) ---
     if pca_reduce:
@@ -184,7 +206,7 @@ def kmeans_anomaly_detection(
 
     # --- Step 4: Compute distances (vectorized) ---
     diffs = data - centroids[labels]
-    distances = np.sqrt(np.einsum("ij,ij->i", diffs, diffs))  # 高效距離運算
+    distances = np.sqrt(np.einsum("ij,ij->i", diffs, diffs))
 
     # --- Step 5: Confidence interval (robust to large n) ---
     lower, upper = np.quantile(distances, [(1 - confidence) / 2, (1 + confidence) / 2])
@@ -216,7 +238,22 @@ def kmeans_anomaly_detection(
         return result_df, float(lower), float(upper)
 
 def vs_kmeans_anomalies(result_df: pd.DataFrame, Activity_type: str, output: str): 
-    """ Visualized Anomaly detection in scatter plot"""
+    """
+Visualize anomaly detection results using a scatter plot.
+
+Parameters
+----------
+result_df : pandas.DataFrame
+    DataFrame containing the anomaly detection results.
+output : str or Path
+    Directory where the generated plot will be saved.
+activity_type : str
+    Activity type used for labeling or categorization in the plot.
+
+Returns
+-------
+None
+    """
     if not {"PCA1", "PCA2"}.issubset(result_df.columns):
         raise ValueError("PCA1, PCA2 columns are missing in df")
     plt.figure(figsize=(8, 6))
@@ -253,20 +290,39 @@ def oneClassSVM_anomaly_detection(
     return_with_input: bool = True
 ):
     """
-    One-Class SVM 異常偵測（效能優化版）
-    - 不進行 scaling（假設輸入已正規化）
-    - 自動抽樣訓練，避免記憶體爆掉
-    - 支援高維度與大樣本資料
-    """
+One-Class SVM–based anomaly detection with scaling and bootstrap sampling.
 
-    # Step 1: 僅取數值欄位
+Parameters
+----------
+df : pd.DataFrame
+    Standardized input dataframe.
+unique_key : str
+    Column name that uniquely identifies each log entry.
+subsample : int
+    Number of rows to sample for training the One-Class SVM.
+nu : float
+    An upper bound on the fraction of training errors and a lower bound
+    on the fraction of support vectors.
+gamma : str
+    Kernel coefficient for the RBF kernel. Default is "scale".
+return_with_input : bool
+    If True, the resulting anomaly scores are merged with the original dataframe.
+
+Returns
+-------
+tuple
+    A tuple containing:
+    - pd.DataFrame: DataFrame of anomaly scores (merged with input if specified).
+    - OneClassSVM: The trained One-Class SVM model.
+"""
+    # Step 1: numerical columns
     numeric_df = df.select_dtypes(include=[np.number])
     if numeric_df.empty:
         raise ValueError("DataFrame 沒有數值欄位可供 OneClassSVM 使用。")
 
-    data = numeric_df.to_numpy(copy=False)  # 不複製記憶體
+    data = numeric_df.to_numpy(copy=False)
 
-    # Step 2: 抽樣訓練子集（防止 kernel memory 爆掉）
+    # Step 2: bootstrap sampling
     n_samples = len(data)
     if n_samples > subsample:
         rng = np.random.default_rng(random_state)
@@ -276,16 +332,16 @@ def oneClassSVM_anomaly_detection(
     else:
         train_data = data
 
-    # Step 3: 建立與訓練模型
+    # Step 3: training model with rbf kernel (required scaled numerical values)
     ocsvm = OneClassSVM(kernel="rbf", nu=nu, gamma=gamma)
     ocsvm.fit(train_data)
 
-    # Step 4: 預測 (1=正常, -1=異常)
+    # Step 4: predict
     preds = ocsvm.predict(data)
     anomalies = preds == -1
-    scores = ocsvm.decision_function(data)  # 越小越異常
+    scores = ocsvm.decision_function(data) 
 
-    # Step 5: 回傳結果
+    # Step 5: return results
     result_df = pd.DataFrame({
         unique_key: df[unique_key].values,
         "anomaly": anomalies,
@@ -293,7 +349,6 @@ def oneClassSVM_anomaly_detection(
     })
 
     if return_with_input:
-        # join 比 merge 記憶體效率更好
         merged_df = df.join(result_df.set_index(unique_key), on=unique_key, how="left")
         print(result_df["anomaly"].value_counts())
         return merged_df, ocsvm
@@ -311,6 +366,37 @@ def vs_oneClassSVM_results(df: pd.DataFrame,
     random_state: int = 42, 
     output: str='./output',
     Activity_type: str = 'Running'): 
+    """
+Visualize One-Class SVM anomaly detection results.
+
+Parameters
+----------
+df : pandas.DataFrame
+    Input DataFrame containing features and anomaly-related columns.
+model : OneClassSVM
+    Trained One-Class SVM model used for anomaly detection.
+unique_key : str
+    Column name representing the unique log identifier.
+anomaly_col : str
+    Column indicating the anomaly flag.
+score_col : str
+    Column containing the anomaly scores produced by the One-Class SVM model.
+pca_components : int
+    Number of PCA components used for dimensionality reduction.
+plot_boundary : bool
+    Whether to visualize the decision boundary of the One-Class SVM.
+random_state : int
+    Random seed used for reproducibility when applying PCA.
+output : str or Path
+    Directory where output plots will be saved.
+Activity_type : str
+    Activity type used for filtering or labeling the visualization.
+
+Returns
+-------
+None
+"""
+
     numeric_df = df.select_dtypes(include=[np.number])
     if numeric_df.empty: 
         raise ValueError('Invalid dataframe')
@@ -323,7 +409,6 @@ def vs_oneClassSVM_results(df: pd.DataFrame,
     data_2d = pca.fit_transform(data)
     print(f"PCA reduced data to {pca_components}D for visualization")
     if plot_boundary and pca_components == 2:
-        # 在 PCA 空間重新擬合模型以畫 decision boundary
         ocsvm_vis = OneClassSVM(kernel="rbf", nu=model.nu, gamma=model.gamma)
         ocsvm_vis.fit(data_2d)
 
@@ -335,7 +420,7 @@ def vs_oneClassSVM_results(df: pd.DataFrame,
         Z = ocsvm_vis.decision_function(grid)
         Z = Z.reshape(xx.shape)
 
-        # 畫 decision boundary
+        # decision boundary
         plt.figure(figsize=(8, 6))
         plt.contourf(xx, yy, Z, levels=np.linspace(Z.min(), 0, 10),
                      cmap=plt.cm.PuBu, alpha=0.7)
