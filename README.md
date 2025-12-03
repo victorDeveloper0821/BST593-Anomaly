@@ -2,25 +2,42 @@
 
 ---
 
-## Introduction
+## 📘 Introduction
 
 This study presents an unsupervised machine learning approach for anomaly detection in wearable-device data, using inter-model agreement to identify irregular patterns.
 
-This repository contains the anomaly detection pipeline applied to the [Kaggle Health and Fitness dataset](https://www.kaggle.com/datasets/evan65549/health-and-fitness-dataset), which includes data from **3,000 participants** and more than **650,000 rows** of time-series observations.
+This repository contains the full anomaly detection pipeline applied to the [Kaggle Health and Fitness dataset](https://www.kaggle.com/datasets/evan65549/health-and-fitness-dataset).  
+The dataset includes **3,000 participants** and more than **650,000 rows** of time-series measurements.
 
 ---
 
-- **01_Introduction**: Contains data preprocessing and summary statistics, including missing-data exploration, data visualization, and hypothesis testing.
+## 📦 Required Libraries
 
-- **02_DataAnalysis**: Corresponding to the main data analysis section; machine-learning–based anomaly detection is implemented using k-means clustering, one-class SVM, and autoencoders.
+### **Python**
+- pandas — dataframe manipulation  
+- numpy  
+- pyarrow — required for reading/writing Parquet files  
+- scikit-learn  
+- torch (PyTorch)  
+- torchvision  
+- torchaudio  
+- notebook / ipykernel  
 
-- **03_results**: Includes the linear mixed-effects logistic regression used to analyze covariates in the activity logs.
-
-- **data/pipeline**: Stores processed outputs from each stage of the pipeline, including Parquet, RDS, and CSV files. Detailed descriptions are provided in [DATA.md](./data/DATA.md).
-
-- **figure**: Contains visualizations summarizing the dataset and plots used for optimizing anomaly detection parameters.
+### **R**
+- tidyr  
+- dplyr  
+- ggplot2  
+- arrow  
+- glmmTMB  
+- xtable  
+- mltools  
+- tidyverse  
+- irr  
+- purrr  
 
 ---
+
+## 📂 Repository Structure
 
 ```
 ├── 01_Introduction
@@ -38,17 +55,62 @@ This repository contains the anomaly detection pipeline applied to the [Kaggle H
 │       └── analysis.R
 ├── data
 │   └── pipeline
-│       └── health_fitness_dataset.csv
+│       ├── autoencoder_running.parquet
+│       ├── autoencoder_swimming.parquet
+│       ├── DATA.md
+│       ├── fitness.parquet
+│       ├── fitness.rds
+│       ├── health_fitness_dataset.csv
+│       ├── kMeans_running.parquet
+│       ├── kMeans_swimming.parquet
+│       ├── oneClassSVM_running.parquet
+│       └── oneClassSVM_swimming.parquet
 ├── figure
+│   ├── activity-pie-chart-1.pdf
+│   ├── avg-hr-boxplot-1.pdf
+│   ├── diastolic-bp-boxplot-1.pdf
+│   ├── health-condition-bar-1.pdf
+│   ├── kmeans_anomaly_Running.png
+│   ├── kmeans_anomaly_Swimming.png
+│   ├── kmeans_parameter_Running.png
+│   ├── kmeans_parameter_Swimming.png
+│   ├── oneClassSVM_Running.png
+│   ├── oneClassSVM_Swimming.png
+│   ├── resting-hr-boxplot-1.pdf
+│   └── systolic-bp-boxplot-1.pdf
 └── README.md
-
 ```
-- **01_Introduction**: preprocessing data and summarizing data, including missing summary, data visualization and hypothesis tests. 
 
-- **02_DataAnalysis**: corresponding data analysis section, machine learning is implemented with k-means based anomaly detection, one class svm and autoencoder. 
+---
 
-- **03_results**: linear mixed effect logistic regression is used to analysis covariants in activity logs. 
+## 📑 Folder Descriptions
 
-- **data/pipeline**: processed files in each stages, including parquet, rds and csv files. Detail description for data pipeline in [DATA.md](./data/pipeline/DATA.md). 
+### **01_Introduction**
+Includes data preprocessing and summary statistics, such as missing-value exploration, descriptive visualizations, and hypothesis testing.
 
-- **figure**:including visualization for overview of dataset and optimizing variables for anomaly detection. 
+### **02_DataAnalysis**
+Contains the main analysis workflow. Machine-learning–based anomaly detection is implemented using:
+- k-means clustering  
+- one-class SVM  
+- autoencoders  
+
+### **03_results**
+Includes the linear mixed-effects logistic regression models used to analyze covariates in the activity-tracking data.
+
+### **data/pipeline**
+Stores processed outputs from each step of the workflow, including:
+- **CSV**
+- **RDS**
+- **Parquet** files  
+
+A detailed description of each dataset is available in  
+➡️ [`DATA.md`](./data/pipeline/DATA.md)
+
+### **figure**
+Contains all visualizations, including:
+- dataset summaries  
+- anomaly detection results  
+- model parameter optimization plots  
+
+---
+

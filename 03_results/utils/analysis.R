@@ -237,7 +237,6 @@ summary_to_corr_matrix <- function(data, col_name, plot_name, activity){
     select(model_a, model_b, all_of(col_name)) %>%
     mutate(
       value = as.numeric(.data[[col_name]]),
-      # 對角線直接設 1
       value = ifelse(model_a == model_b, 1, value)
     )
   
