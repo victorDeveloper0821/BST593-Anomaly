@@ -240,7 +240,7 @@ def compute_reconstruction_error(model, df, feature_cols, device=None, batch_siz
     recon_errors = []
 
     with torch.no_grad():
-        # batch inference (避免 GPU OOM)
+        # batch inference
         for i in range(0, len(X), batch_size):
             batch = X_tensor[i:i+batch_size]
             reconstructed = model(batch)
