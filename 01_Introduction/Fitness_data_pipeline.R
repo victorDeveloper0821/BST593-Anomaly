@@ -2,7 +2,7 @@ library(dplyr)
 library(tidyr)
 library(arrow)
 
-fitness <- read.csv('./health_fitness_dataset.csv')
+fitness <- read.csv('../data/pipeline/health_fitness_dataset.csv')
 
 summary(fitness)
 
@@ -27,6 +27,6 @@ summary(fitness_clean)
 unique(fitness_clean$activity_type)
 unique(fitness_clean$gender)
 
-saveRDS(fitness_clean, "./output/fitness.rds")
-write_parquet(fitness_clean, "./output/fitness.parquet")
+saveRDS(fitness_clean, "../data/pipeline/fitness.rds")
+write_parquet(fitness_clean, "../data/pipeline/fitness.parquet")
 

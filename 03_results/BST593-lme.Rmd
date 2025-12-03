@@ -25,7 +25,7 @@ library(xtable)
 library(glmmTMB)
 
 ## read from cleaned RDS
-fitness_cleaned <- readRDS('fitness.rds')
+fitness_cleaned <- readRDS('../data/pipeline/fitness.rds')
 
 ## unique log id
 fitness_cleaned$unique_log_id = paste(fitness_cleaned$participant_id, fitness_cleaned$activity_type, fitness_cleaned$date, sep="_")
@@ -57,7 +57,7 @@ head(swimming_data)
 #### Join data from Kmeans
 
 ```{r}
-kmeans_swimming <- read_parquet('./data/kMeans_swimming.parquet')
+kmeans_swimming <- read_parquet('../data/pipeline/kMeans_swimming.parquet')
 
 kmeans.swim.result <- merge(swimming_data, kmeans_swimming, by = "unique_log_id")
 
@@ -67,7 +67,7 @@ head(kmeans.swim.result)
 #### Join data from one class svm:
 
 ```{r}
-ocsvm_swimming <- read_parquet('./data/oneClassSVM_swimming.parquet')
+ocsvm_swimming <- read_parquet('../data/pipeline/oneClassSVM_swimming.parquet')
 
 ocsvm.swim.result <- merge(swimming_data, ocsvm_swimming, by = "unique_log_id")
 
@@ -77,7 +77,7 @@ head(ocsvm.swim.result)
 ### Join data from autoencoder:
 
 ```{r}
-autoencoder_swimming <- read_parquet('./data/autoencoder_swimming.parquet')
+autoencoder_swimming <- read_parquet('../data/pipeline/autoencoder_swimming.parquet')
 autoE.swim.result <- merge(swimming_data, autoencoder_swimming, by = 'unique_log_id')
 
 head(autoE.swim.result)
@@ -94,7 +94,7 @@ head(running_data)
 ### Join data from k-means
 
 ```{r}
-kmeans_running <- read_parquet('./data/kMeans_running.parquet')
+kmeans_running <- read_parquet('../data/pipeline/kMeans_running.parquet')
 
 kmeans.running.result <- merge(running_data, kmeans_running, by = "unique_log_id")
 
@@ -104,7 +104,7 @@ head(kmeans.running.result)
 ### Join data from one class svm:
 
 ```{r}
-ocsvm_running <- read_parquet('./data/oneClassSVM_running.parquet')
+ocsvm_running <- read_parquet('../data/pipeline/oneClassSVM_running.parquet')
 
 ocsvm.running.result <- merge(running_data, ocsvm_running, by = "unique_log_id")
 
@@ -114,7 +114,7 @@ head(ocsvm.running.result)
 ### AutoEncoder for running:
 
 ```{r}
-autoencoder_running <- read_parquet('./data/autoencoder_running.parquet')
+autoencoder_running <- read_parquet('../data/pipeline/autoencoder_running.parquet')
 autoE.run.result <- merge(running_data, autoencoder_running, by = 'unique_log_id')
 
 head(autoE.run.result)

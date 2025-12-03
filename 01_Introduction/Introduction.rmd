@@ -24,11 +24,11 @@ This section provides a basic overview of the dataset, including the distributio
 ```{r , echo=FALSE}
 library(dplyr)
 library(ggplot2)
-fitness_origin <- read.csv("./health_fitness_dataset.csv")
+fitness_origin <- read.csv("../data/pipeline/health_fitness_dataset.csv")
 
 fitness_origin <- fitness_origin[,c('age', 'height_cm', 'bmi', 'daily_steps', 'avg_heart_rate','resting_heart_rate', 'blood_pressure_systolic', 'blood_pressure_diastolic', 'health_condition')]
 ## read from cleaned RDS
-fitness_cleaned <- readRDS('fitness.rds')
+fitness_cleaned <- readRDS('../data/pipeline/fitness.rds')
 
 summary(fitness_cleaned)
 ```
