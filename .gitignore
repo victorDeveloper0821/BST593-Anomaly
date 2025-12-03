@@ -4,7 +4,7 @@ data/pipeline/*.csv
 data/pipeline/*.rds
 
 # keep readme
-!data/pipeline/README.md
+!data/pipeline/DATA.md
 
 
 ## 02_DataAnalysis
@@ -16,4 +16,6 @@ data/pipeline/*.rds
 
 ## 03_results
 
+## figure: 
+figure/**
 ## general 
